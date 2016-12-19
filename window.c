@@ -112,6 +112,7 @@ bool xrdb_load_value(XrmDatabase db, const char* resource,
 	if (value.addr != NULL)
 	{
 		strncpy(out_value, value.addr, size);
+		out_value[strlen(value.addr)] = '\0';
 		return true;
 	}
 
