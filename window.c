@@ -21,6 +21,7 @@
 #include <locale.h>
 #include <X11/cursorfont.h>
 #include <X11/Xatom.h>
+#include <X11/Xresource.h>
 
 #include "options.h"
 #include "util.h"
@@ -100,6 +101,23 @@ void win_check_wm_support(Display *dpy, Window root)
 #define INIT_ATOM_(atom) \
 	atoms[ATOM_##atom] = XInternAtom(e->dpy, #atom, False);
 
+bool xrdb_load_value(XrmDatabase db, const char* resource,
+                     char* out_value, size_t size)
+{
+	char* type;
+	XrmValue value;
+
+	XrmGetResource(db, resource, "*", &type, &value);
+
+	if (value.addr != NULL)
+	{
+		strncpy(out_value, value.addr, size);
+		return true;
+	}
+
+	return false;
+}
+
 void win_init(win_t *win)
 {
 	win_env_t *e;
@@ -120,19 +138,49 @@ void win_init(win_t *win)
 	if (setlocale(LC_CTYPE, "") == NULL || XSupportsLocale() == 0)
 		error(0, 0, "No locale support");
 
-	win_init_font(e, BAR_FONT);
+	XrmInitialize();
+	const char* xrm = XResourceManagerString(e->dpy);
+	XrmDatabase xrdb = XrmGetStringDatabase(xrm);
+	char xrvalue[128];
+	memset(xrvalue, 0, sizeof(xrvalue));
 
-	win_alloc_color(e, WIN_BG_COLOR, &win->bgcol);
-	win_alloc_color(e, WIN_FS_COLOR, &win->fscol);
-	win_alloc_color(e, SEL_COLOR,    &win->selcol);
-	win_alloc_color(e, BAR_BG_COLOR, &win->bar.bgcol);
-	win_alloc_color(e, BAR_FG_COLOR, &win->bar.fgcol);
+	if (xrdb_load_value(xrdb, "sxiv.font", xrvalue, sizeof(xrvalue)))
+		win_init_font(e, xrvalue);
+	else
+		win_init_font(e, BAR_FONT);
+
+	if (xrdb_load_value(xrdb, "sxiv.win_bg_color", xrvalue, 7))
+		win_alloc_color(e, xrvalue, &win->bgcol);
+	else
+		win_alloc_color(e, WIN_BG_COLOR, &win->bgcol);
+
+	if (xrdb_load_value(xrdb, "sxiv.win_fs_color", xrvalue, 7))
+		win_alloc_color(e, xrvalue, &win->fscol);
+	else
+		win_alloc_color(e, WIN_FS_COLOR, &win->fscol);
+
+	if (xrdb_load_value(xrdb, "sxiv.sel_color", xrvalue, 7))
+		win_alloc_color(e, xrvalue, &win->selcol);
+	else
+		win_alloc_color(e, SEL_COLOR, &win->selcol);
+
+	if (xrdb_load_value(xrdb, "sxiv.bar_bg_color", xrvalue, 7))
+		win_alloc_color(e, xrvalue, &win->bar.bgcol);
+	else
+		win_alloc_color(e, BAR_BG_COLOR, &win->bar.bgcol);
+
+	if (xrdb_load_value(xrdb, "sxiv.bar_fg_color", xrvalue, 7))
+		win_alloc_color(e, xrvalue, &win->bar.fgcol);
+	else
+		win_alloc_color(e, BAR_FG_COLOR, &win->bar.fgcol);
 
 	win->bar.l.size = BAR_L_LEN;
 	win->bar.r.size = BAR_R_LEN;
 	win->bar.l.buf = emalloc(win->bar.l.size);
 	win->bar.r.buf = emalloc(win->bar.r.size);
 	win->bar.h = options->hide_bar ? 0 : barheight;
+
+  XrmDestroyDatabase(xrdb);
 
 	INIT_ATOM_(WM_DELETE_WINDOW);
 	INIT_ATOM_(_NET_WM_NAME);
