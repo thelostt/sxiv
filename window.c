@@ -207,8 +207,15 @@ void win_open(win_t *win)
 	XSizeHints sizehints;
 	Bool fullscreen = options->fullscreen && fs_support;
 
+
 	e = &win->env;
 	parent = options->embed != 0 ? options->embed : RootWindow(e->dpy, e->scr);
+
+	XrmInitialize();
+	const char* xrm = XResourceManagerString(e->dpy);
+	XrmDatabase xrdb = XrmGetStringDatabase(xrm);
+	char xrvalue[128];
+	memset(xrvalue, 0, sizeof(xrvalue));
 
 	sizehints.flags = PWinGravity;
 	sizehints.win_gravity = NorthWestGravity;
@@ -222,11 +229,17 @@ void win_open(win_t *win)
 	if ((gmask & WidthValue) != 0)
 		sizehints.flags |= USSize;
 	else
-		win->w = WIN_WIDTH;
+		if (xrdb_load_value(xrdb, "sxiv.win_width", xrvalue, 10))
+			win->w = atoi(xrvalue);
+		else
+			win->w = WIN_WIDTH;
 	if ((gmask & HeightValue) != 0)
 		sizehints.flags |= USSize;
 	else
-		win->h = WIN_HEIGHT;
+		if (xrdb_load_value(xrdb, "sxiv.win_height", xrvalue, 10))
+			win->h = atoi(xrvalue);
+		else
+			win->h = WIN_HEIGHT;
 	if ((gmask & XValue) != 0) {
 		if ((gmask & XNegative) != 0) {
 			win->x += e->scrw - win->w;
@@ -236,6 +249,9 @@ void win_open(win_t *win)
 	} else {
 		win->x = 0;
 	}
+	
+	XrmDestroyDatabase(xrdb);
+
 	if ((gmask & YValue) != 0) {
 		if ((gmask & YNegative) != 0) {
 			win->y += e->scrh - win->h;
